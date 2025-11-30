@@ -26,6 +26,47 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Token storage keys
+const TOKEN_KEY = "token";
+const TOKEN_EXPIRY_KEY = "token_expiry";
+const USER_DATA_KEY = "user_data";
+
+// Helper functions for token storage
+const saveToken = (token: string) => {
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() + 30); // 30 days from now
+  
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_EXPIRY_KEY, expiryDate.toISOString());
+  console.log(`✅ Token saved. Expires on: ${expiryDate.toLocaleString()}`);
+};
+
+const getToken = (): string | null => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY);
+  
+  if (!token || !expiryStr) {
+    return null;
+  }
+  
+  const expiryDate = new Date(expiryStr);
+  const now = new Date();
+  
+  if (now > expiryDate) {
+    console.warn("⚠️ Token has expired, clearing...");
+    clearAuth();
+    return null;
+  }
+  
+  return token;
+};
+
+const clearAuth = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  localStorage.removeItem(USER_DATA_KEY);
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -38,34 +79,75 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkAuth = async () => {
     try {
-      const storedToken = localStorage.getItem("token");
+      // First, try to get token from storage
+      const storedToken = getToken();
       if (!storedToken) {
-        console.log("ℹ️ No token found in localStorage");
+        console.log("ℹ️ No valid token found in localStorage");
         setIsLoading(false);
         return;
       }
 
-      console.log("🔍 Token found in localStorage, verifying...");
+      // Try to load user data from localStorage first (faster)
+      const storedUserData = localStorage.getItem(USER_DATA_KEY);
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          setUser(userData);
+          setToken(storedToken);
+          console.log("✅ Loaded user data from cache");
+        } catch (e) {
+          console.warn("⚠️ Failed to parse stored user data");
+        }
+      }
+
+      console.log("🔍 Token found, verifying with server...");
       setToken(storedToken);
       
-      // Verify token by fetching user data
-      const response = await userAPI.getMe();
-      
-      if (response && response.data) {
-        setUser(response.data);
+      // Verify token by fetching user data from server
+      try {
+        const response = await userAPI.getMe();
         
-        // Check if user is admin
-        if (response.data.role !== "admin" && response.data.role !== "super_admin") {
-          // Not an admin, clear auth
-          console.warn("⚠️ User is not an admin, logging out");
-          logout();
-          throw new Error("Access denied. Admin access required.");
+        if (response && response.data) {
+          const userData = response.data;
+          setUser(userData);
+          
+          // Store user data in localStorage for faster loading
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+          
+          // Check if user is admin
+          if (userData.role !== "admin" && userData.role !== "super_admin") {
+            // Not an admin, clear auth
+            console.warn("⚠️ User is not an admin, logging out");
+            clearAuth();
+            setToken(null);
+            setUser(null);
+            setIsLoading(false);
+            return;
+          }
+          console.log("✅ Authentication verified, user is admin");
         }
-        console.log("✅ Authentication verified, user is admin");
+      } catch (apiError: any) {
+        // If API call fails but we have cached user data, use it
+        if (storedUserData) {
+          console.warn("⚠️ API verification failed, using cached user data:", apiError.message);
+          // Don't logout, use cached data
+        } else {
+          // No cached data and API failed, need to logout
+          throw apiError;
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Auth check failed:", error);
-      logout();
+      // Only logout if it's an authentication error, not a network error
+      if (error.message?.includes("401") || error.message?.includes("Unauthorized") || error.message?.includes("Access denied")) {
+        console.log("🔒 Authentication error, logging out");
+        clearAuth();
+        setToken(null);
+        setUser(null);
+      } else {
+        // Network or other errors - keep token but show warning
+        console.warn("⚠️ Network error during auth check, keeping existing session");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -92,15 +174,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Access denied. Admin access required.");
       }
 
-      // Store token in localStorage
+      // Store token with expiration (30 days)
       try {
-        localStorage.setItem("token", response.token);
-        // Verify token was saved
-        const savedToken = localStorage.getItem("token");
-        if (!savedToken || savedToken !== response.token) {
-          throw new Error("Failed to save token to localStorage");
+        saveToken(response.token);
+        // Store user data
+        if (response.user) {
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
         }
-        console.log("✅ Token saved successfully to localStorage");
       } catch (storageError) {
         console.error("❌ Error saving token:", storageError);
         throw new Error("Failed to save authentication token");
@@ -126,15 +206,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Access denied. Admin access required.");
       }
 
-      // Store token in localStorage
+      // Store token with expiration (30 days)
       try {
-        localStorage.setItem("token", response.token);
-        // Verify token was saved
-        const savedToken = localStorage.getItem("token");
-        if (!savedToken || savedToken !== response.token) {
-          throw new Error("Failed to save token to localStorage");
+        saveToken(response.token);
+        // Store user data
+        if (response.user) {
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
         }
-        console.log("✅ Token saved successfully to localStorage");
       } catch (storageError) {
         console.error("❌ Error saving token:", storageError);
         throw new Error("Failed to save authentication token");
@@ -148,7 +226,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    clearAuth();
     setToken(null);
     setUser(null);
   };

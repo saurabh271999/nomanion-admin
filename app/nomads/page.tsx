@@ -69,7 +69,7 @@ function Nomads() {
         params.search = search;
       }
 
-      const response = await userAPI.getAllNomads(params);
+      const response = await userAPI.getAllNomads(params) as any;
       setNomads(response.data || []);
       setPagination(response.pagination || pagination);
     } catch (err: any) {

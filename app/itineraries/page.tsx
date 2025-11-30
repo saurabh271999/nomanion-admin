@@ -61,25 +61,33 @@ function Itineraries() {
     try {
       setLoading(true);
       setError(null);
+      console.log("🔄 Fetching itineraries...", { activeTab, page: pagination.page, limit: pagination.limit });
 
       if (activeTab === "published") {
         const response = await itineraryAPI.getPublished({
           page: pagination.page,
           limit: pagination.limit,
-        });
+        }) as any;
+        console.log("📦 Published itineraries response:", response);
         setPublishedItineraries(response.data || []);
         setPagination(response.pagination || pagination);
       } else {
         const response = await itineraryAPI.getDrafts({
           page: pagination.page,
           limit: pagination.limit,
-        });
+        }) as any;
+        console.log("📦 Draft itineraries response:", response);
         setDraftItineraries(response.data || []);
         setPagination(response.pagination || pagination);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to fetch itineraries");
-      console.error("Error fetching itineraries:", err);
+      const errorMessage = err.message || "Failed to fetch itineraries";
+      setError(errorMessage);
+      console.error("❌ Error fetching itineraries:", {
+        error: err,
+        message: errorMessage,
+        stack: err.stack,
+      });
     } finally {
       setLoading(false);
     }
@@ -87,7 +95,8 @@ function Itineraries() {
 
   useEffect(() => {
     fetchItineraries();
-  }, [activeTab, pagination.page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pagination.page, pagination.limit]);
 
   const handlePublish = async (id: string) => {
     Modal.confirm({

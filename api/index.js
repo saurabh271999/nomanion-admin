@@ -10,31 +10,70 @@ const apiClient = axios.create({
   },
 });
 
+// Helper function to get token with expiration check
+const getValidToken = () => {
+  if (typeof window === "undefined") return null;
+  
+  const token = localStorage.getItem("token");
+  const expiryStr = localStorage.getItem("token_expiry");
+  
+  if (!token || !expiryStr) {
+    return null;
+  }
+  
+  const expiryDate = new Date(expiryStr);
+  const now = new Date();
+  
+  if (now > expiryDate) {
+    console.warn("⚠️ Token has expired");
+    localStorage.removeItem("token");
+    localStorage.removeItem("token_expiry");
+    localStorage.removeItem("user_data");
+    return null;
+  }
+  
+  return token;
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
-    // Get token from localStorage
+    // Get token from localStorage with expiration check
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         // Log token usage for debugging (remove in production)
         console.log("🔑 Using token for API request:", token.substring(0, 20) + "...");
       } else {
-        console.warn("⚠️ No token found in localStorage for API request");
+        console.warn("⚠️ No valid token found in localStorage for API request");
       }
     }
+    // Log the request being made
+    console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.params || config.data || "");
     return config;
   },
   (error) => {
+    console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
+    return response.data;
+  },
   (error) => {
+    console.error("❌ API Error:", {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    });
     const message =
       error.response?.data?.message ||
       error.message ||
@@ -254,6 +293,17 @@ export const reviewAPI = {
   // Get pending reviews (admin only)
   getPending: async () => {
     return apiClient.get("/api/v1/itinerary/reviews/pending");
+  },
+};
+
+// ============================================
+// STATS APIs
+// ============================================
+
+export const statsAPI = {
+  // Get dashboard statistics
+  getStats: async () => {
+    return apiClient.get("/api/v1/stats");
   },
 };
 
