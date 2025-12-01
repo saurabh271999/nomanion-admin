@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { userAPI } from "../../api";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import { Modal, Button, Image, message } from "antd";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface Nomad {
   _id: string;
@@ -27,11 +28,18 @@ interface Nomad {
     youtube?: string;
     facebook?: string;
     twitter?: string;
+    linkedin?: string;
   };
   coordinates?: {
     latitude?: number;
     longitude?: number;
   };
+  notificationsEnabled?: boolean;
+  travelPreference?: string[];
+  destinationPreference?: string[];
+  isYoutubeVerified?: boolean;
+  subscription?: string;
+  coins?: number;
 }
 
 function Nomads() {
@@ -53,14 +61,35 @@ function Nomads() {
     mobileNumber: "",
     bio: "",
     role: "",
+    gender: "",
+    startingYearOfTraveling: "",
+    favoriteDestination: "",
+    favoriteActivity: "",
+    totalCountries: "",
+    isDisabled: false,
+    isYoutubeVerified: false,
+    notificationsEnabled: false,
+    travelPreference: "",
+    destinationPreference: "",
+    instagram: "",
+    twitter: "",
+    facebook: "",
+    linkedin: "",
+    youtube: "",
+    latitude: "",
+    longitude: "",
+    subscription: "",
+    coins: "",
   });
+
+  const { isAdmin } = useAuth();
 
   const fetchNomads = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const params: any = {
+      const params: Record<string, unknown> = {
         page: pagination.page,
         limit: pagination.limit,
       };
@@ -69,11 +98,18 @@ function Nomads() {
         params.search = search;
       }
 
-      const response = await userAPI.getAllNomads(params) as any;
+      const response = (await userAPI.getAllNomads(
+        params
+      )) as {
+        data?: Nomad[];
+        pagination?: typeof pagination;
+      };
       setNomads(response.data || []);
       setPagination(response.pagination || pagination);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch nomads");
+    } catch (err) {
+      const messageText =
+        err instanceof Error ? err.message : "Failed to fetch nomads";
+      setError(messageText);
       console.error("Error fetching nomads:", err);
     } finally {
       setLoading(false);
@@ -82,6 +118,7 @@ function Nomads() {
 
   useEffect(() => {
     fetchNomads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, search]);
 
   const handleView = async (id: string) => {
@@ -91,13 +128,13 @@ function Nomads() {
       if (nomad) {
         setViewingNomad(nomad);
       } else {
-        // If not found in list, try to get from API
-        const response = await userAPI.getMe(); // This gets current user, but we need a get user by ID endpoint
-        // For now, just use the nomad from the list
+        // If not found in list (should be rare), show a warning
         message.warning("Nomad details not available");
       }
-    } catch (err: any) {
-      message.error(err.message || "Failed to fetch nomad details");
+    } catch (err) {
+      const messageText =
+        err instanceof Error ? err.message : "Failed to fetch nomad details";
+      message.error(messageText);
     }
   };
 
@@ -112,8 +149,10 @@ function Nomads() {
           await userAPI.deleteNomad(id);
           message.success("Nomad deleted successfully!");
           fetchNomads();
-        } catch (err: any) {
-          message.error(err.message || "Failed to delete nomad");
+        } catch (err) {
+          const messageText =
+            err instanceof Error ? err.message : "Failed to delete nomad";
+          message.error(messageText);
         }
       },
     });
@@ -122,11 +161,49 @@ function Nomads() {
   const handleEdit = (nomad: Nomad) => {
     setEditingNomad(nomad);
     setEditForm({
-      fullName: nomad.fullName || "",
-      email: nomad.email || "",
-      mobileNumber: nomad.mobileNumber || "",
-      bio: nomad.bio || "",
-      role: nomad.role || "",
+      fullName: nomad.fullName || "N/A",
+      email: nomad.email || "N/A",
+      mobileNumber: nomad.mobileNumber || "N/A",
+      bio: nomad.bio || "N/A",
+      role: nomad.role || "N/A",
+      gender: nomad.gender || "N/A",
+      startingYearOfTraveling: nomad.startingYearOfTraveling || "N/A",
+      favoriteDestination: nomad.favoriteDestination || "N/A",
+      favoriteActivity:
+        nomad.favoriteActivity && nomad.favoriteActivity.length > 0
+          ? nomad.favoriteActivity.join(", ")
+          : "N/A",
+      totalCountries:
+        typeof nomad.totalCountries === "number"
+          ? String(nomad.totalCountries)
+          : "N/A",
+      isDisabled: nomad.isDisabled ?? false,
+      isYoutubeVerified: nomad.isYoutubeVerified ?? false,
+      notificationsEnabled: nomad.notificationsEnabled ?? false,
+      travelPreference:
+        nomad.travelPreference && nomad.travelPreference.length > 0
+          ? nomad.travelPreference.join(", ")
+          : "N/A",
+      destinationPreference:
+        nomad.destinationPreference && nomad.destinationPreference.length > 0
+          ? nomad.destinationPreference.join(", ")
+          : "N/A",
+      instagram: nomad.socialMedia?.instagram || "N/A",
+      twitter: nomad.socialMedia?.twitter || "N/A",
+      facebook: nomad.socialMedia?.facebook || "N/A",
+      linkedin: nomad.socialMedia?.linkedin || "N/A",
+      youtube: nomad.socialMedia?.youtube || "N/A",
+      latitude:
+        typeof nomad.coordinates?.latitude === "number"
+          ? String(nomad.coordinates.latitude)
+          : "N/A",
+      longitude:
+        typeof nomad.coordinates?.longitude === "number"
+          ? String(nomad.coordinates.longitude)
+          : "N/A",
+      subscription: nomad.subscription || "N/A",
+      coins:
+        typeof nomad.coins === "number" ? String(nomad.coins) : "N/A",
     });
   };
 
@@ -134,12 +211,78 @@ function Nomads() {
     if (!editingNomad) return;
 
     try {
-      await userAPI.updateNomad(editingNomad._id, editForm);
+      const normalize = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed || trimmed === "N/A") return undefined;
+        return trimmed;
+      };
+
+      const toArray = (value: string) => {
+        const norm = normalize(value);
+        return norm
+          ? norm
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : undefined;
+      };
+
+      const payload: Record<string, unknown> = {
+        fullName: normalize(editForm.fullName),
+        email: normalize(editForm.email),
+        mobileNumber: normalize(editForm.mobileNumber),
+        bio: normalize(editForm.bio),
+        role: normalize(editForm.role),
+        gender: normalize(editForm.gender),
+        startingYearOfTraveling: normalize(
+          editForm.startingYearOfTraveling
+        ),
+        favoriteDestination: normalize(editForm.favoriteDestination),
+        totalCountries:
+          normalize(editForm.totalCountries) !== undefined
+            ? Number(editForm.totalCountries)
+            : undefined,
+        favoriteActivity: toArray(editForm.favoriteActivity),
+        travelPreference: toArray(editForm.travelPreference),
+        destinationPreference: toArray(editForm.destinationPreference),
+        isDisabled: editForm.isDisabled,
+        isYoutubeVerified: editForm.isYoutubeVerified,
+        notificationsEnabled: editForm.notificationsEnabled,
+        subscription: normalize(editForm.subscription),
+        coins:
+          normalize(editForm.coins) !== undefined
+            ? Number(editForm.coins)
+            : undefined,
+      };
+
+      const social: Record<string, string | undefined> = {
+        instagram: normalize(editForm.instagram),
+        twitter: normalize(editForm.twitter),
+        facebook: normalize(editForm.facebook),
+        linkedin: normalize(editForm.linkedin),
+        youtube: normalize(editForm.youtube),
+      };
+      if (Object.values(social).some((v) => v !== undefined)) {
+        payload.socialMedia = social;
+      }
+
+      const latNorm = normalize(editForm.latitude);
+      const lngNorm = normalize(editForm.longitude);
+      if (latNorm !== undefined && lngNorm !== undefined) {
+        payload.coordinates = {
+          latitude: Number(editForm.latitude),
+          longitude: Number(editForm.longitude),
+        };
+      }
+
+      await userAPI.updateNomad(editingNomad._id, payload);
       message.success("Nomad updated successfully!");
       setEditingNomad(null);
       fetchNomads();
-    } catch (err: any) {
-      message.error(err.message || "Failed to update nomad");
+    } catch (err) {
+      const messageText =
+        err instanceof Error ? err.message : "Failed to update nomad";
+      message.error(messageText);
     }
   };
 
@@ -151,6 +294,25 @@ function Nomads() {
       mobileNumber: "",
       bio: "",
       role: "",
+      gender: "",
+      startingYearOfTraveling: "",
+      favoriteDestination: "",
+      favoriteActivity: "",
+      totalCountries: "",
+      isDisabled: false,
+      isYoutubeVerified: false,
+      notificationsEnabled: false,
+      travelPreference: "",
+      destinationPreference: "",
+      instagram: "",
+      twitter: "",
+      facebook: "",
+      linkedin: "",
+      youtube: "",
+      latitude: "",
+      longitude: "",
+      subscription: "",
+      coins: "",
     });
   };
 
@@ -225,9 +387,11 @@ function Nomads() {
                           <td className="px-6 py-4">
                             <div className="flex items-center">
                               {nomad.profilePic && (
-                                <img
+                                <Image
                                   src={nomad.profilePic}
                                   alt={nomad.fullName}
+                                  width={40}
+                                  height={40}
                                   className="h-10 w-10 rounded-full mr-3"
                                 />
                               )}
@@ -281,20 +445,26 @@ function Nomads() {
                               >
                                 View
                               </Button>
-                              <Button
-                                type="primary"
-                                size="small"
-                                onClick={() => handleEdit(nomad)}
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                danger
-                                size="small"
-                                onClick={() => handleDelete(nomad._id, nomad.fullName)}
-                              >
-                                Delete
-                              </Button>
+                              {isAdmin && (
+                                <>
+                                  <Button
+                                    type="primary"
+                                    size="small"
+                                    onClick={() => handleEdit(nomad)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    danger
+                                    size="small"
+                                    onClick={() =>
+                                      handleDelete(nomad._id, nomad.fullName)
+                                    }
+                                  >
+                                    Delete
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -310,9 +480,11 @@ function Nomads() {
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center flex-1">
                           {nomad.profilePic && (
-                            <img
+                            <Image
                               src={nomad.profilePic}
                               alt={nomad.fullName}
+                              width={48}
+                              height={48}
                               className="h-12 w-12 rounded-full mr-3"
                             />
                           )}
@@ -351,17 +523,29 @@ function Nomads() {
 
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => handleEdit(nomad)}
-                          className="flex-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
+                          onClick={() => handleView(nomad._id)}
+                          className="flex-1 px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 rounded hover:bg-purple-100"
                         >
-                          Edit
+                          View
                         </button>
-                        <button
-                          onClick={() => handleDelete(nomad._id, nomad.fullName)}
-                          className="flex-1 px-3 py-2 text-xs font-medium text-red-700 bg-red-50 rounded hover:bg-red-100"
-                        >
-                          Delete
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => handleEdit(nomad)}
+                              className="flex-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDelete(nomad._id, nomad.fullName)
+                              }
+                              className="flex-1 px-3 py-2 text-xs font-medium text-red-700 bg-red-50 rounded hover:bg-red-100"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -496,48 +680,94 @@ function Nomads() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Total Countries</p>
-                  <p className="text-gray-900 font-medium text-lg">{viewingNomad.totalCountries || 0}</p>
+                  <p className="text-gray-900 font-medium text-lg">
+                    {viewingNomad.totalCountries || 0}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Starting Year</p>
-                  <p className="text-gray-900">{viewingNomad.startingYearOfTraveling || "N/A"}</p>
+                  <p className="text-gray-900">
+                    {viewingNomad.startingYearOfTraveling || "N/A"}
+                  </p>
                 </div>
                 {viewingNomad.favoriteDestination && (
                   <div>
                     <p className="text-sm text-gray-500">Favorite Destination</p>
-                    <p className="text-gray-900">{viewingNomad.favoriteDestination}</p>
+                    <p className="text-gray-900">
+                      {viewingNomad.favoriteDestination}
+                    </p>
                   </div>
                 )}
-                {viewingNomad.favoriteActivity && viewingNomad.favoriteActivity.length > 0 && (
-                  <div>
-                    <p className="text-sm text-gray-500">Favorite Activities</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {viewingNomad.favoriteActivity.map((activity, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded"
-                        >
-                          {activity}
-                        </span>
-                      ))}
+                {viewingNomad.favoriteActivity &&
+                  viewingNomad.favoriteActivity.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-500">Favorite Activities</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {viewingNomad.favoriteActivity.map((activity, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded"
+                          >
+                            {activity}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {viewingNomad.destinationCovered && viewingNomad.destinationCovered.length > 0 && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-500 mb-2">Destinations Covered</p>
-                    <div className="flex flex-wrap gap-2">
-                      {viewingNomad.destinationCovered.map((destination, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded"
-                        >
-                          {destination}
-                        </span>
-                      ))}
+                  )}
+                {viewingNomad.travelPreference &&
+                  viewingNomad.travelPreference.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-500 mb-1">Travel Preference</p>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingNomad.travelPreference.map((pref, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                          >
+                            {pref}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                {viewingNomad.destinationPreference &&
+                  viewingNomad.destinationPreference.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-500 mb-1">
+                        Destination Preference
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingNomad.destinationPreference.map((pref, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 rounded"
+                          >
+                            {pref}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                {viewingNomad.destinationCovered &&
+                  viewingNomad.destinationCovered.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-500 mb-2">
+                        Destinations Covered
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingNomad.destinationCovered.map(
+                          (destination, index) => (
+                            <span
+                              key={index}
+                              className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded"
+                            >
+                              {destination}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -626,6 +856,32 @@ function Nomads() {
                     {new Date(viewingNomad.createdAt).toLocaleDateString()}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-gray-500">Notifications Enabled</p>
+                  <p className="text-gray-900">
+                    {viewingNomad.notificationsEnabled ? "Yes" : "No"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">YouTube Verified</p>
+                  <p className="text-gray-900">
+                    {viewingNomad.isYoutubeVerified ? "Yes" : "No"}
+                  </p>
+                </div>
+                {typeof viewingNomad.coins === "number" && (
+                  <div>
+                    <p className="text-sm text-gray-500">Coins</p>
+                    <p className="text-gray-900">{viewingNomad.coins}</p>
+                  </div>
+                )}
+                {viewingNomad.subscription && (
+                  <div>
+                    <p className="text-sm text-gray-500">Subscription ID</p>
+                    <p className="text-xs text-gray-900 break-all">
+                      {viewingNomad.subscription}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -640,7 +896,7 @@ function Nomads() {
               <h2 className="text-2xl font-bold mb-4">Edit Nomad</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
                     Full Name
                   </label>
                   <input
@@ -649,11 +905,11 @@ function Nomads() {
                     onChange={(e) =>
                       setEditForm({ ...editForm, fullName: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
                     Email
                   </label>
                   <input
@@ -662,11 +918,11 @@ function Nomads() {
                     onChange={(e) =>
                       setEditForm({ ...editForm, email: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
                     Mobile Number
                   </label>
                   <input
@@ -675,11 +931,11 @@ function Nomads() {
                     onChange={(e) =>
                       setEditForm({ ...editForm, mobileNumber: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
                     Bio
                   </label>
                   <textarea
@@ -688,11 +944,11 @@ function Nomads() {
                       setEditForm({ ...editForm, bio: e.target.value })
                     }
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
                     Role
                   </label>
                   <select
@@ -700,12 +956,318 @@ function Nomads() {
                     onChange={(e) =>
                       setEditForm({ ...editForm, role: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="nomad">Nomad</option>
                     <option value="explorer">Explorer</option>
                     <option value="admin">Admin</option>
                   </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Gender
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.gender}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, gender: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Starting Year of Traveling
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.startingYearOfTraveling}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          startingYearOfTraveling: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Favorite Destination
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.favoriteDestination}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          favoriteDestination: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Total Countries
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.totalCountries}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          totalCountries: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Favorite Activities (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.favoriteActivity}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        favoriteActivity: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Travel Preference (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.travelPreference}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        travelPreference: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Destination Preference (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.destinationPreference}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        destinationPreference: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Latitude
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.latitude}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          latitude: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Longitude
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.longitude}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          longitude: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Instagram
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.instagram}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          instagram: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Twitter
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.twitter}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          twitter: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Facebook
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.facebook}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          facebook: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      LinkedIn
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.linkedin}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          linkedin: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      YouTube
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.youtube}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          youtube: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Subscription ID
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.subscription}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          subscription: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
+                      Coins
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.coins}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          coins: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.isDisabled}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          isDisabled: e.target.checked,
+                        })
+                      }
+                    />
+                    Disabled
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.isYoutubeVerified}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          isYoutubeVerified: e.target.checked,
+                        })
+                      }
+                    />
+                    YouTube Verified
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.notificationsEnabled}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          notificationsEnabled: e.target.checked,
+                        })
+                      }
+                    />
+                    Notifications Enabled
+                  </label>
                 </div>
               </div>
               <div className="flex gap-4 mt-6">
@@ -732,7 +1294,7 @@ function Nomads() {
 
 export default function NomadsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin={false}>
       <Nomads />
     </ProtectedRoute>
   );

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://nomanion-backend.onrender.com";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7001";
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -136,6 +136,27 @@ export const userAPI = {
   // Get all nomads (admin only)
   getAllNomads: async (params = {}) => {
     return apiClient.get("/api/v1/user/nomads", { params });
+  },
+
+  // Get all explorers (admin only)
+  getAllExplorers: async (params = {}) => {
+    return apiClient.get("/api/v1/user/explorers", { params });
+  },
+
+  // Explorer actions by ID (admin only)
+  // POST /api/v1/user/explorers/:userId
+  postExplorerAction: async (userId, data = {}) => {
+    return apiClient.post(`/api/v1/user/explorers/${userId}`, data);
+  },
+
+  // PATCH /api/v1/user/explorers/:userId
+  updateExplorer: async (userId, data = {}) => {
+    return apiClient.patch(`/api/v1/user/explorers/${userId}`, data);
+  },
+
+  // DELETE /api/v1/user/explorers/:userId
+  deleteExplorer: async (userId) => {
+    return apiClient.delete(`/api/v1/user/explorers/${userId}`);
   },
 
   // Delete nomad (admin only)

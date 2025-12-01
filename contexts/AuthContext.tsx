@@ -105,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Verify token by fetching user data from server
       try {
-        const response = await userAPI.getMe();
+        const response = await userAPI.getMe() as any;
         
         if (response && response.data) {
           const userData = response.data;
@@ -114,17 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Store user data in localStorage for faster loading
           localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
           
-          // Check if user is admin
-          if (userData.role !== "admin" && userData.role !== "super_admin") {
-            // Not an admin, clear auth
-            console.warn("⚠️ User is not an admin, logging out");
-            clearAuth();
-            setToken(null);
-            setUser(null);
-            setIsLoading(false);
-            return;
-          }
-          console.log("✅ Authentication verified, user is admin");
+          console.log("✅ Authentication verified");
         }
       } catch (apiError: any) {
         // If API call fails but we have cached user data, use it
@@ -163,15 +153,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, otp: string) => {
     try {
-      const response = await authAPI.verifyOtp(email, otp);
+      const response = await authAPI.verifyOtp(email, otp) as any;
       
       if (!response || !response.token) {
         throw new Error("Login failed: No token received");
-      }
-
-      // Check if user is admin
-      if (response.user && response.user.role !== "admin" && response.user.role !== "super_admin") {
-        throw new Error("Access denied. Admin access required.");
       }
 
       // Store token with expiration (30 days)
@@ -195,15 +180,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginWithPassword = async (email: string, password: string) => {
     try {
-      const response = await authAPI.loginWithPassword(email, password);
+      const response = await authAPI.loginWithPassword(email, password) as any;
       
       if (!response || !response.token) {
         throw new Error("Login failed: No token received");
-      }
-
-      // Check if user is admin
-      if (response.user && response.user.role !== "admin" && response.user.role !== "super_admin") {
-        throw new Error("Access denied. Admin access required.");
       }
 
       // Store token with expiration (30 days)
