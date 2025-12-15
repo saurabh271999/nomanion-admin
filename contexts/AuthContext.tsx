@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 import { authAPI, userAPI } from "../api";
 
 interface User {
@@ -35,7 +41,7 @@ const USER_DATA_KEY = "user_data";
 const saveToken = (token: string) => {
   const expiryDate = new Date();
   expiryDate.setDate(expiryDate.getDate() + 30); // 30 days from now
-  
+
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(TOKEN_EXPIRY_KEY, expiryDate.toISOString());
   console.log(`✅ Token saved. Expires on: ${expiryDate.toLocaleString()}`);
@@ -44,20 +50,20 @@ const saveToken = (token: string) => {
 const getToken = (): string | null => {
   const token = localStorage.getItem(TOKEN_KEY);
   const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY);
-  
+
   if (!token || !expiryStr) {
     return null;
   }
-  
+
   const expiryDate = new Date(expiryStr);
   const now = new Date();
-  
+
   if (now > expiryDate) {
     console.warn("⚠️ Token has expired, clearing...");
     clearAuth();
     return null;
   }
-  
+
   return token;
 };
 
@@ -102,24 +108,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log("🔍 Token found, verifying with server...");
       setToken(storedToken);
-      
+
       // Verify token by fetching user data from server
       try {
-        const response = await userAPI.getMe() as any;
-        
+        const response = (await userAPI.getMe()) as any;
+
         if (response && response.data) {
           const userData = response.data;
           setUser(userData);
-          
+
           // Store user data in localStorage for faster loading
           localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-          
+
           console.log("✅ Authentication verified");
         }
       } catch (apiError: any) {
         // If API call fails but we have cached user data, use it
         if (storedUserData) {
-          console.warn("⚠️ API verification failed, using cached user data:", apiError.message);
+          console.warn(
+            "⚠️ API verification failed, using cached user data:",
+            apiError.message
+          );
           // Don't logout, use cached data
         } else {
           // No cached data and API failed, need to logout
@@ -129,14 +138,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.error("❌ Auth check failed:", error);
       // Only logout if it's an authentication error, not a network error
-      if (error.message?.includes("401") || error.message?.includes("Unauthorized") || error.message?.includes("Access denied")) {
+      if (
+        error.message?.includes("401") ||
+        error.message?.includes("Unauthorized") ||
+        error.message?.includes("Access denied")
+      ) {
         console.log("🔒 Authentication error, logging out");
         clearAuth();
         setToken(null);
         setUser(null);
       } else {
         // Network or other errors - keep token but show warning
-        console.warn("⚠️ Network error during auth check, keeping existing session");
+        console.warn(
+          "⚠️ Network error during auth check, keeping existing session"
+        );
       }
     } finally {
       setIsLoading(false);
@@ -153,8 +168,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, otp: string) => {
     try {
-      const response = await authAPI.verifyOtp(email, otp) as any;
-      
+      const response = (await authAPI.verifyOtp(email, otp)) as any;
+
       if (!response || !response.token) {
         throw new Error("Login failed: No token received");
       }
@@ -180,8 +195,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginWithPassword = async (email: string, password: string) => {
     try {
-      const response = await authAPI.loginWithPassword(email, password) as any;
-      
+      const response = (await authAPI.loginWithPassword(
+        email,
+        password
+      )) as any;
+
       if (!response || !response.token) {
         throw new Error("Login failed: No token received");
       }
@@ -241,4 +259,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

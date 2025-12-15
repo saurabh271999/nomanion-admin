@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.nomanion.com";
+const API_BASE_URL = "https://api.nomanion.com";
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -13,17 +13,17 @@ const apiClient = axios.create({
 // Helper function to get token with expiration check
 const getValidToken = () => {
   if (typeof window === "undefined") return null;
-  
+
   const token = localStorage.getItem("token");
   const expiryStr = localStorage.getItem("token_expiry");
-  
+
   if (!token || !expiryStr) {
     return null;
   }
-  
+
   const expiryDate = new Date(expiryStr);
   const now = new Date();
-  
+
   if (now > expiryDate) {
     console.warn("⚠️ Token has expired");
     localStorage.removeItem("token");
@@ -31,7 +31,7 @@ const getValidToken = () => {
     localStorage.removeItem("user_data");
     return null;
   }
-  
+
   return token;
 };
 
@@ -44,13 +44,21 @@ apiClient.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
         // Log token usage for debugging (remove in production)
-        console.log("🔑 Using token for API request:", token.substring(0, 20) + "...");
+        console.log(
+          "🔑 Using token for API request:",
+          token.substring(0, 20) + "..."
+        );
       } else {
         console.warn("⚠️ No valid token found in localStorage for API request");
       }
     }
     // Log the request being made
-    console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.params || config.data || "");
+    console.log(
+      `🌐 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${
+        config.url
+      }`,
+      config.params || config.data || ""
+    );
     return config;
   },
   (error) => {
@@ -62,7 +70,12 @@ apiClient.interceptors.request.use(
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
+    console.log(
+      `✅ API Response: ${response.config.method?.toUpperCase()} ${
+        response.config.url
+      }`,
+      response.data
+    );
     return response.data;
   },
   (error) => {
@@ -75,9 +88,7 @@ apiClient.interceptors.response.use(
       message: error.message,
     });
     const message =
-      error.response?.data?.message ||
-      error.message ||
-      "An error occurred";
+      error.response?.data?.message || error.message || "An error occurred";
     return Promise.reject(new Error(message));
   }
 );
@@ -330,4 +341,3 @@ export const statsAPI = {
 
 // Export default apiClient for custom requests
 export default apiClient;
-
