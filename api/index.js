@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7001";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.nomanion.com";
 
 // Create axios instance with default config
 const apiClient = axios.create({
