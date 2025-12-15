@@ -11,12 +11,11 @@
   "dependencies": {
     "antd": "^6.0.0",
     "axios": "^1.13.2",
-    "next": "16.0.5",
+    "next": "^16.0.10",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "@next/swc-darwin-arm64": "^16.0.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
